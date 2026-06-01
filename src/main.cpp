@@ -5,14 +5,13 @@
 #include "ForzaTelemetry.h"
 #include "OledDisplay.h"
 #include "RpmLeds.h"
+#include "SettingsStore.h"
+#include "WebDashboard.h"
 #include "WifiConfig.h"
 
 namespace {
-constexpr uint16_t UdpPort = 5300;
-constexpr uint8_t LedBluePin = 16;
-constexpr uint8_t LedGreenPin = 17;
-constexpr uint8_t LedYellowPin = 18;
-constexpr uint8_t LedRedPin = 19;
+constexpr uint8_t LedStripPin = 5;
+constexpr uint16_t LedStripCount = 60;
 constexpr unsigned long TelemetryTimeoutMs = 1000;
 constexpr unsigned long WifiRetryDelayMs = 500;
 constexpr unsigned long SerialPrintIntervalMs = 250;
@@ -20,13 +19,18 @@ constexpr unsigned long IdleStatusIntervalMs = 5000;
 constexpr size_t PacketBufferSize = 512;
 
 WiFiUDP udp;
-RpmLeds rpmLeds(LedBluePin, LedGreenPin, LedYellowPin, LedRedPin);
+SettingsStore settingsStore;
+DeviceSettings settings;
+RpmLeds rpmLeds(LedStripPin, LedStripCount);
 OledDisplay oledDisplay;
+TelemetryStatus telemetryStatus;
+WebDashboard dashboard(settings, telemetryStatus, settingsStore, rpmLeds);
 uint8_t packetBuffer[PacketBufferSize];
 unsigned long lastPacketTimeMs = 0;
 unsigned long lastSerialPrintMs = 0;
 unsigned long lastIdleStatusMs = 0;
 bool telemetryTimedOut = true;
+uint16_t activeUdpPort = 0;
 
 void connectWifi() {
   WiFi.mode(WIFI_STA);
@@ -43,7 +47,9 @@ void connectWifi() {
   Serial.println("Wi-Fi connected.");
   Serial.print("ESP32 IP address: ");
   Serial.println(WiFi.localIP());
-  oledDisplay.showWifiConnected(WiFi.localIP(), UdpPort);
+  Serial.print("Dashboard: http://");
+  Serial.println(WiFi.localIP());
+  oledDisplay.showWifiConnected(WiFi.localIP(), settings.udpPort);
 }
 
 void printTelemetry(const ForzaTelemetryPacket& telemetry, float rpmPercent) {
@@ -62,25 +68,66 @@ void printTelemetry(const ForzaTelemetryPacket& telemetry, float rpmPercent) {
   Serial.print(rpmPercent * 100.0f, 1);
   Serial.println("%");
 }
+
+void beginUdp(uint16_t udpPort) {
+  udp.stop();
+  udp.begin(udpPort);
+  activeUdpPort = udpPort;
+  Serial.print("Listening for Forza telemetry on UDP port ");
+  Serial.println(activeUdpPort);
+}
+
+void applyRuntimeSettings() {
+  rpmLeds.applySettings(settings);
+  if (activeUdpPort != settings.udpPort) {
+    beginUdp(settings.udpPort);
+  }
+  if (telemetryTimedOut) {
+    rpmLeds.off();
+    oledDisplay.showWaiting(WiFi.localIP(), activeUdpPort);
+  }
+}
+
+void updateTelemetryStatus(const ForzaTelemetryPacket& telemetry, float rpmPercent) {
+  telemetryStatus.raceOn = telemetry.isRaceOn;
+  telemetryStatus.timedOut = false;
+  telemetryStatus.currentRpm = telemetry.currentEngineRpm;
+  telemetryStatus.maxRpm = telemetry.engineMaxRpm;
+  telemetryStatus.rpmPercent = rpmPercent;
+  telemetryStatus.packetSize = telemetry.packetSize;
+  telemetryStatus.layoutName = telemetry.layoutName;
+  telemetryStatus.lastPacketAgeMs = 0;
+}
 }  // namespace
 
 void setup() {
   Serial.begin(115200);
   delay(100);
 
+  settingsStore.begin();
+  settings = settingsStore.load();
+
   rpmLeds.begin();
+  rpmLeds.applySettings(settings);
   oledDisplay.begin();
   rpmLeds.startupTest();
 
   connectWifi();
+  dashboard.begin();
 
-  udp.begin(UdpPort);
-  Serial.print("Listening for Forza telemetry on UDP port ");
-  Serial.println(UdpPort);
+  beginUdp(settings.udpPort);
 }
 
 void loop() {
   const unsigned long loopNowMs = millis();
+  dashboard.handleClient();
+  if (dashboard.consumeSettingsChanged()) {
+    applyRuntimeSettings();
+  }
+
+  telemetryStatus.timedOut = telemetryTimedOut;
+  telemetryStatus.lastPacketAgeMs = lastPacketTimeMs == 0 ? 0 : loopNowMs - lastPacketTimeMs;
+
   const int packetSize = udp.parsePacket();
   if (packetSize > 0) {
     const size_t bytesToRead = min(static_cast<size_t>(packetSize), PacketBufferSize);
@@ -93,6 +140,7 @@ void loop() {
         telemetryTimedOut = false;
 
         const float rpmPercent = telemetry.rpmPercent();
+        updateTelemetryStatus(telemetry, rpmPercent);
         if (loopNowMs - lastSerialPrintMs >= SerialPrintIntervalMs) {
           lastSerialPrintMs = loopNowMs;
           printTelemetry(telemetry, rpmPercent);
@@ -122,6 +170,9 @@ void loop() {
 
   if (!telemetryTimedOut && loopNowMs - lastPacketTimeMs > TelemetryTimeoutMs) {
     telemetryTimedOut = true;
+    telemetryStatus.timedOut = true;
+    telemetryStatus.raceOn = false;
+    telemetryStatus.rpmPercent = 0.0f;
     rpmLeds.off();
     Serial.println("Telemetry timeout; LEDs off.");
     oledDisplay.showTimeout();
@@ -132,7 +183,7 @@ void loop() {
     Serial.print("Waiting for Forza UDP on ");
     Serial.print(WiFi.localIP());
     Serial.print(":");
-    Serial.println(UdpPort);
-    oledDisplay.showWaiting(WiFi.localIP(), UdpPort);
+    Serial.println(activeUdpPort);
+    oledDisplay.showWaiting(WiFi.localIP(), activeUdpPort);
   }
 }
