@@ -42,6 +42,9 @@ The default thresholds are configurable from the web dashboard and are saved on 
 - Breadboard and jumper wires
 - USB cable
 
+<img width="2336" height="957" alt="image" src="https://github.com/user-attachments/assets/6ece48bf-1e37-4d6f-a652-418a44aa96c4" />
+
+
 Default LED strip wiring:
 
 | LED Strip Pin | ESP32 Pin |
