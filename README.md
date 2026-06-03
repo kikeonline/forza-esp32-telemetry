@@ -4,6 +4,9 @@ ESP32 shift-light firmware for Forza Motorsport and Forza Horizon telemetry. The
 
 It also supports a common `0.96 inch` I2C OLED display (`128x64`, SSD1306, address `0x3C`) for IP address, waiting status, and live RPM display.
 
+https://github.com/user-attachments/assets/d32a462e-c607-4398-87a9-8e56c3a9e0a1
+
+
 ## Behavior
 
 The firmware normalizes RPM with:
