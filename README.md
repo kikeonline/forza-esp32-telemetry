@@ -1,6 +1,6 @@
 # Forza ESP32 RPM LEDs
 
-ESP32 shift-light firmware for Forza Motorsport and Forza Horizon telemetry. The firmware drives a WS2812/NeoPixel-style LED strip on GPIO5, listens for Forza UDP telemetry over Wi-Fi, and exposes a small web dashboard for live status and runtime settings.
+ESP32 shift-light firmware for Forza Motorsport and Forza Horizon telemetry. The firmware drives a WS2812/NeoPixel-style LED strip on GPIO27, listens for Forza UDP telemetry over Wi-Fi, and exposes a small web dashboard for live status and runtime settings.
 
 It also supports a common `0.96 inch` I2C OLED display (`128x64`, SSD1306, address `0x3C`) for IP address, waiting status, and live RPM display.
 
@@ -22,7 +22,7 @@ The value is clamped from `0.0` to `1.0`, then mapped to a single strip color:
 | `80-100%` | Red |
 | `>= 85%` | Active RPM pattern blinks |
 
-The dashboard can switch between LED RPM modes:
+The dashboard and physical mode buttons can switch between LED RPM modes:
 
 | Mode | Behavior |
 |---|---|
@@ -39,6 +39,7 @@ The default thresholds are configurable from the web dashboard and are saved on 
 - ESP32 DevKit-style board
 - WS2812/NeoPixel-style addressable LED strip
 - Optional `0.96 inch` I2C OLED, `128x64`, SSD1306, usually address `0x3C`
+- Optional two momentary buttons for RPM mode selection
 - Breadboard and jumper wires
 - USB cable
 
@@ -46,7 +47,7 @@ Default LED strip wiring:
 
 | LED Strip Pin | ESP32 Pin |
 |---|---|
-| DIN/Data | GPIO5 |
+| DIN/Data | GPIO27 |
 | GND | `GND` |
 | 5V/VCC | External 5V supply or suitable 5V source |
 
@@ -58,6 +59,16 @@ Default OLED wiring:
 | GND | `GND` |
 | SDA | GPIO21 |
 | SCL | GPIO22 |
+
+Default mode button wiring:
+
+| Button | ESP32 Pin | Other Side |
+|---|---|---|
+| Previous RPM mode | GPIO16 | `GND` |
+| Next RPM mode | GPIO18 | `GND` |
+| Alternate next RPM mode | GPIO19 | `GND` |
+
+The buttons use ESP32 internal pullups, so no external resistor is required for basic momentary push buttons. An unpressed or disconnected button reads as `HIGH`; pressing the button connects the GPIO to `GND` and reads as `LOW`.
 
 Connect ESP32 GND and LED strip power-supply GND together. Keep brightness conservative unless the strip has a power supply sized for the number of pixels.
 
@@ -108,7 +119,7 @@ pio run -e led_strip_test --target upload
 pio device monitor -e led_strip_test
 ```
 
-The test lights the first 60 pixels on GPIO5 at low brightness and cycles red, green, blue, and dim white.
+The test lights the first 60 pixels on GPIO27 at low brightness and cycles red, green, blue, and dim white.
 
 ## Web Dashboard
 
@@ -128,6 +139,8 @@ The dashboard shows live race/RPM/packet/Wi-Fi status and lets you change:
 - Red blink threshold
 
 Settings are saved on the ESP32 and survive reboot. If you change the UDP port, update the port in Forza telemetry settings too. The dashboard also includes buttons for a strip startup test, turning the strip off, and resetting saved settings to defaults.
+
+The physical RPM mode buttons also save the selected mode. Press GPIO16's button to move backward through `Fill -> Center -> Solid -> Fill`, or GPIO18's button to move forward through `Fill -> Solid -> Center -> Fill`. GPIO19 is also accepted as an alternate next-mode input.
 
 ## Forza Setup
 
@@ -157,7 +170,7 @@ The parser reads these little-endian fields and ignores packets shorter than 28 
 
 If LEDs do not turn on during startup test:
 
-- Confirm the strip data input is wired to GPIO5.
+- Confirm the strip data input is wired to GPIO27.
 - Confirm the strip input end is connected, not the output end.
 - Confirm ESP32 GND and the strip power-supply GND are connected together.
 - Confirm the strip has enough 5V power for the number of lit pixels.
@@ -173,7 +186,7 @@ If Wi-Fi connects but no telemetry appears:
 
 If the OLED stays blank:
 
-- Confirm VCC goes to `3V3`, not GPIO5 or another signal pin.
+- Confirm VCC goes to `3V3`, not GPIO27 or another signal pin.
 - Confirm OLED GND is tied to ESP32 GND.
 - Confirm SDA is GPIO21 and SCL is GPIO22.
 - Check whether your OLED uses I2C address `0x3C`. Some modules use `0x3D`.

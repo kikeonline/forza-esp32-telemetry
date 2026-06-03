@@ -36,6 +36,10 @@ bool OledDisplay::isAvailable() const {
   return available_;
 }
 
+void OledDisplay::setRpmLedMode(RpmLedMode ledMode) {
+  ledMode_ = ledMode;
+}
+
 void OledDisplay::showBoot() {
   if (!available_) {
     return;
@@ -79,7 +83,7 @@ void OledDisplay::showWifiConnected(const IPAddress& ip, uint16_t udpPort) {
   displayDriver.print("UDP ");
   displayDriver.println(udpPort);
   displayDriver.setCursor(0, 50);
-  displayDriver.println("Waiting for Forza");
+  printModeLine(0, 50);
   display();
 }
 
@@ -97,6 +101,7 @@ void OledDisplay::showWaiting(const IPAddress& ip, uint16_t udpPort) {
   displayDriver.println(udpPort);
   displayDriver.setCursor(0, 42);
   displayDriver.println("No telemetry yet");
+  printModeLine(0, 54);
   display();
 }
 
@@ -112,10 +117,13 @@ void OledDisplay::showTimeout() {
   displayDriver.println("Signal timeout");
   displayDriver.setCursor(0, 44);
   displayDriver.println("LEDs off");
+  printModeLine(0, 54);
   display();
 }
 
-void OledDisplay::showTelemetry(const ForzaTelemetryPacket& telemetry, float rpmPercent) {
+void OledDisplay::showTelemetry(const ForzaTelemetryPacket& telemetry,
+                                float rpmPercent,
+                                RpmLedMode ledMode) {
   if (!available_) {
     return;
   }
@@ -133,9 +141,43 @@ void OledDisplay::showTelemetry(const ForzaTelemetryPacket& telemetry, float rpm
   displayDriver.setCursor(86, 32);
   displayDriver.print(static_cast<int>(rpmPercent * 100.0f + 0.5f));
   displayDriver.println("%");
+  displayDriver.setCursor(86, 44);
+  displayDriver.println(rpmLedModeName(ledMode));
 
   drawRpmBar(rpmPercent);
   display();
+}
+
+void OledDisplay::showRpmModeChanged(RpmLedMode ledMode) {
+  if (!available_) {
+    return;
+  }
+
+  displayDriver.clearDisplay();
+  drawHeader("RPM Mode");
+  displayDriver.setTextSize(2);
+  displayDriver.setCursor(0, 24);
+  displayDriver.println(rpmLedModeName(ledMode));
+  display();
+}
+
+const char* OledDisplay::rpmLedModeName(RpmLedMode ledMode) const {
+  switch (ledMode) {
+    case RpmLedMode::Fill:
+      return "Fill";
+    case RpmLedMode::Solid:
+      return "Solid";
+    case RpmLedMode::Center:
+      return "Center";
+  }
+  return "Unknown";
+}
+
+void OledDisplay::printModeLine(int16_t x, int16_t y) {
+  displayDriver.setTextSize(1);
+  displayDriver.setCursor(x, y);
+  displayDriver.print("Mode ");
+  displayDriver.println(rpmLedModeName(ledMode_));
 }
 
 void OledDisplay::drawHeader(const char* title) {
@@ -149,9 +191,9 @@ void OledDisplay::drawRpmBar(float rpmPercent) {
   rpmPercent = constrain(rpmPercent, 0.0f, 1.0f);
 
   constexpr int x = 0;
-  constexpr int y = 52;
+  constexpr int y = 54;
   constexpr int width = 128;
-  constexpr int height = 12;
+  constexpr int height = 10;
   const int filledWidth = static_cast<int>((width - 2) * rpmPercent + 0.5f);
 
   displayDriver.drawRect(x, y, width, height, SSD1306_WHITE);

@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 namespace {
-constexpr uint8_t LedStripPin = 5;
+constexpr uint8_t LedStripPin = 27;
 constexpr uint16_t LedCount = 60;
 constexpr uint8_t Brightness = 32;
 constexpr unsigned long StepDelayMs = 20;
@@ -36,7 +36,7 @@ void setup() {
   strip.clear();
   strip.show();
 
-  Serial.println("LED strip test on GPIO5");
+  Serial.println("LED strip test on GPIO27");
   Serial.println("Lighting first 60 pixels at low brightness.");
 
   fillStrip(strip.Color(24, 24, 24));
